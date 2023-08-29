@@ -1,0 +1,174 @@
+# E-Commerce - Retenção de Clientes -  Tempo Médio de Recompra Histórico
+
+## Estratégias usadas para solução do problema:
+
+**Passo 1:** Importação de pacotes no Jupyter Notebook 
+# Importando os Pacotes
+# Manipulação de dados
+import pandas as pd
+import numpy as np
+import datetime as dt
+
+# Visualização
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+# Estatística
+import scipy
+from scipy.stats import normaltest
+from scipy.stats import chi2_contingency
+
+# Ignore Warning
+import sys
+import warnings
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
+    
+# Estrátegia para valores ausentes
+import math
+import sys, os
+sys.path.append(os.path.abspath(os.path.join('modulos')))
+from estrategia1 import *
+
+
+**Passo 2:** Carregando dataset de vendas no Pandas
+ecom = pd.read_excel('dataset_tratado.xlsx')
+
+**Passo 3:** Análise exploratória dos dados
+ecom.shape
+ecom.isnull().sum()
+
+**Passo 4:** Limpeza dos dados
+ecom = ecom.dropna(subset=['id', 'cliente_document', 'entrega_estado'])
+
+func_calc_percentual_valores_ausentes(ecom)
+
+**Passo 5:** Desconsiderando pedidos aonde foram cancelados
+ecom = ecom.drop(ecom[ecom['status'] == 'Cancelado'].index)
+ecom['status'].value_counts()
+
+**Passo 6:** Separando coluna da data da venda para colunas de data e hora
+ecom['data'] = pd.to_datetime(ecom['data'])
+ecom['hora'] = ecom['data'].dt.time
+ecom['data'] = ecom['data'].dt.date
+
+hora = ecom['hora']
+
+- Exclua a coluna 'coluna3' do DataFrame
+ecom = ecom.drop(columns=['hora'])
+
+- Insira a coluna 'coluna3' novamente na primeira posição do DataFrame
+ecom.insert(2, 'hora', hora)
+
+**Passo 7:** Excluindo linhas duplicatas e mantendo apenas a primeira linha do dataset
+*Pois a cada realização da compra de mais de um produto no dataset, o sistema de vendas cria uma linha adicional para cada produto sem o seu valor, assim apenas a primeira linha de pedido é que importa.
+ecom.drop_duplicates(subset=['id', 'cliente_document'], keep='first', inplace=True)
+
+
+**Passo 8:** Excluindo linhas de vendas de upsell no dataset
+compras_upsell = []
+
+# Iterar sobre as linhas do DataFrame
+for i in range(len(ecom)-1):
+    linha_atual = ecom.iloc[i]
+    
+    # Iterar até 10 linhas seguintes a partir da linha atual
+    for j in range(i+1, min(i+11, len(ecom))):
+        linha_seguinte = ecom.iloc[j]
+        
+        cpf_atual = linha_atual['cliente_document']
+        cpf_seguinte = linha_seguinte['cliente_document']
+        
+        data_atual = linha_atual['data']
+        data_seguinte = linha_seguinte['data']
+        
+        id_atual = linha_atual['id']
+        id_seguinte = linha_seguinte['id']
+        
+        # Verificar se as linhas têm o mesmo CPF, mesma data e horários diferentes
+        if cpf_atual == cpf_seguinte and data_atual == data_seguinte and id_atual != id_seguinte:
+            compra_upsell = {
+                'CPF': cpf_atual,
+                'Data': data_atual,
+                'ID Anterior': id_atual,
+                'ID Seguinte': id_seguinte
+            }
+            
+            compras_upsell.append(compra_upsell)
+
+# Imprimir apenas o valor do ID Seguinte
+for compra in compras_upsell:
+    print(compra)
+    
+**Passo 9:** Criando uma cópia do Dataset sem valores duplicados e de vendas de upsell
+lista_ids_seguinte = []
+
+# Percorre a lista 'compras_upsell'
+for compra in compras_upsell:
+    id_seguinte = compra['ID Seguinte']
+    lista_ids_seguinte.append(id_seguinte)
+
+# Imprime os valores dos 'ID Seguinte'
+for id_seguinte in lista_ids_seguinte:
+    print(id_seguinte)
+    
+len(lista_ids_seguinte)
+
+# Criar uma cópia do dataset 'ecom' para preservar os dados originais
+ecom_sem_upsell = ecom.copy()
+​
+# Filtrar e remover as linhas com IDs Seguintes na lista
+ecom_sem_upsell = ecom_sem_upsell[~ecom_sem_upsell['id'].isin(lista_ids_seguinte)].reset_index(drop=True)
+ecom_sem_upsell.info()
+
+**Passo 10:** Calculando a quantidade clientes que realizaram a recompras no dataset
+contagem_retencao_cpf = ecom_sem_upsell['cliente_document'].value_counts()
+
+# Filtrar apenas os CPFs que aparecem mais de uma vez
+cpf_com_mais_compras = contagem_retencao_cpf[contagem_retencao_cpf > 1]
+
+# Imprimir a quantidade de compras para cada CPF com mais de uma compra
+for cpf, quantidade_compras in cpf_com_mais_compras.items():
+    print(f"CPF: {cpf} - Quantidade de Compras: {quantidade_compras}")
+    
+**Passo 11:** Calculando o tempo médio entre as recompras histórica
+data_inicio = pd.to_datetime('2020-06-01')
+data_fim = pd.to_datetime('2023-06-30')
+
+diferenca_dias = (data_fim - data_inicio).days
+# Converter a coluna de data para formato de data
+ecom_sem_upsell['data'] = pd.to_datetime(ecom_sem_upsell['data'])
+
+# Filtrar os dados do mês de setembro de 2020
+total_meses = ecom_sem_upsell[(ecom_sem_upsell['data'] >= data_inicio) & (ecom_sem_upsell['data'] <= data_fim)]
+
+# Ordenar os dados por CPF e data
+total_meses = total_meses.sort_values(['cliente_document', 'data'])
+
+# Calcular a diferença em dias entre cada recompra e a última compra anterior
+total_meses['dias_desde_ultima_compra'] = total_meses.groupby('cliente_document')['data'].diff().dt.days
+
+**Passo 12:** Verificando estatísticas referente ao tempo médio entre as recompras histórica
+total_meses['dias_desde_ultima_compra'].describe()
+
+**Passo 13:** Gráfico de tempo de relação entre recompra e quantidade de dias
+# Obtenha a contagem de cada valor na coluna 'dias_desde_ultima_compra'
+contagem_valores = total_meses['dias_desde_ultima_compra'].value_counts()
+
+# Ordene os valores pela ordem crescente do índice
+contagem_valores = contagem_valores.sort_index()
+plt.figure(figsize = (12,6), dpi = 200)
+# Crie um gráfico de barras com os valores e seus pesos correspondentes
+plt.bar(contagem_valores.index, contagem_valores.values)
+
+# Adicione rótulos adequados aos eixos x e y
+plt.xlabel('dias')
+plt.ylabel('tempo de recompra')
+plt.xticks(rotation=90)
+plt.tight_layout()
+# Exiba o gráfico
+plt.show()
+### FIM
