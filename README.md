@@ -1,10 +1,8 @@
 # Tempo Médio de Recompra - Retenção de Clientes
 Projeto executado em Python, com objetivo de responder algumas perguntas de negócio de retenção de clientes da base de clientes de E-commerce.
 
-# Estratégias usadas para Solução do Problema:
+# Estratégias Usadas para Solução do Problema:
 Passo 1: Importação de pacotes no Jupyter Notebook
-
-
 
 Passo 2: Carregando dataset de vendas no Pandas ecom = pd.read_excel('dataset_tratado.xlsx')
 
